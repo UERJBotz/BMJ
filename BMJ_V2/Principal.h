@@ -21,12 +21,6 @@ enum AlvoDirecao {
     ALVO_DIREITA
 };
 
-// Leitura dos Sensores
-// [0] = Frente Esquerda
-// [1] = Frente
-// [2] = Frente Direita
-
-int leitura[3];
 
 int vel_base = 400;
 float erro_angular = 0;
@@ -67,12 +61,6 @@ int ataque_confirmado = 0;
 const int ATAQUE_THRESHOLD = 2;
 
 
-void leituraSensores() {
-    leitura[0] = digitalRead(FEsq);
-    leitura[1] = digitalRead(Frente);
-    leitura[2] = digitalRead(FDir);
-}
-
 // Única função que decide "onde está o inimigo" a partir de leitura[].
 // leituraSensores() precisa ter sido chamado antes.
 AlvoDirecao classificarAlvo() {
@@ -85,7 +73,7 @@ AlvoDirecao classificarAlvo() {
     return SEM_ALVO;
 }
 
-void calculoErroAngular() {
+void calculoErroAngular() { //! retornar erro
 
     // geometria angular
     float peso[3] = {-2.0, 0.0, 2.0};
@@ -113,29 +101,28 @@ void calculoErroAngular() {
         // pelo menos 1 sensor ativo. Salvaguarda caso reaproveitem
         // esta função em outro contexto.)
         if (erro_angular >= 0)
-            erro_angular = 1.5;
+            erro_angular = 2.5;
         else
-            erro_angular = -1.5;
+            erro_angular = -2.5;
     }
 }
 
 // PID
 
-void pid() {
-
-    calculoErroAngular();
-
-    P = erro_angular;
+void pid() { //! retornar
+    calculoErroAngular(); //!
 
     // Anti-windup simples: só acumula I se Ki estiver realmente ativo.
-    // Com Ki=0 é inerte (comportamento atual não muda), mas evita I
-    // acumulado escondido se ligarem Ki depois.
-    if (Ki != 0.0) {
+    // mas evita I acumulado escondido se ligarem Ki depois.
+    #if 0
+    if (abs(Ki) >= EPSILON) {
         I += erro_angular;
     } else {
         I = 0.0;
     }
+    #endif
 
+    P = erro_angular;
     D = erro_angular - erro_anterior;
 
     PID = (Kp * P) + (Ki * I) + (Kd * D);
@@ -144,18 +131,15 @@ void pid() {
 }
 
 // VARREDURA PENDULAR (lógica inalterada — já validada por vocês)
-
-estadoPendulo varreduraPendular(estadoPendulo estadoAtual)
-{
-
+//! só usar no começo antes de ter visto qualquer coisa
+estadoPendulo varreduraPendular(estadoPendulo estadoAtual) {
     unsigned long agora = millis();
 
-    if((agora-ultimo_pendulo) >= tempo_pendulo) {
+    if ((agora-ultimo_pendulo) >= tempo_pendulo) {
 
         ultimo_pendulo = agora;
 
-        switch(estadoAtual) {
-
+        switch(estadoAtual) { //! define VELOCIDADE_VARREDURA
             case DIREITA:
                 mover(350,-350);
                 return MEIA_ESQUERDA;
@@ -175,20 +159,16 @@ estadoPendulo varreduraPendular(estadoPendulo estadoAtual)
     }
 
     return estadoAtual;
-
 }
 
 
 // FULL ATTACK (condição original — 3 sensores confirmados por N ciclos)
-
 bool fullAttackDetectado() {
-
-    if (leitura[0] && leitura[1] && leitura[2]) {
-
+    if (leitura[0] &&
+        leitura[1] &&
+        leitura[2]) {
         ataque_confirmado++;
-
     } else {
-
         ataque_confirmado = 0;
     }
 
@@ -196,7 +176,6 @@ bool fullAttackDetectado() {
 }
 
 // TARGET TRACKER PRINCIPAL
-
 void iSeeYou() { // estratégia número 4 no controle
     //if(evitarBorda()) return;
     leituraSensores();
@@ -204,40 +183,29 @@ void iSeeYou() { // estratégia número 4 no controle
     // SEM ALVO -> VARREDURA PENDULAR
 
     if (classificarAlvo() == SEM_ALVO) {
-
         estadoAtual = varreduraPendular(estadoAtual);
-
         return;
     }
 
     // OS 3 SENSORES, CONFIRMADO POR N CICLOS -> FULL ATTACK
 
     if (fullAttackDetectado()) {
-
         mover(1023, 1023);
-
         return;
     }
 
     // COM ALVO -> PID ANGULAR
 
-    pid();
+    pid(); //!
 
     // Sinal confirmado por consistência com varreduraPendular():
     // alvo à esquerda (erro negativo) -> esq diminui, dir aumenta ->
     // gira PARA a esquerda (na direção do alvo).
-    int velocidade_esq =
-        vel_base + PID;
+    int velocidade_esq = vel_base + PID;
+    int velocidade_dir = vel_base - PID;
 
-    int velocidade_dir =
-        vel_base - PID;
-
-    velocidade_esq =
-        constrain(velocidade_esq, -800, 800);
-
-    velocidade_dir =
-        constrain(velocidade_dir, -800, 800);
-
+    velocidade_esq = constrain(velocidade_esq, -800, 800);  //! define VEL_MAX
+    velocidade_dir = constrain(velocidade_dir, -800, 800);  //! define VEL_MAX
     mover(velocidade_esq, velocidade_dir);
 }
 
@@ -245,21 +213,15 @@ void iSeeYou() { // estratégia número 4 no controle
 
 //     bool linha_esq = digitalRead(linhaEsq);
 //     bool linha_dir = digitalRead(linhaDir);
-
-//     if (!linha_esq && !linha_dir) {
-//         return false;
-//     }
+//     if (!linha_esq && !linha_dir) return false;
 
 //     Serial.println("!!! BORDA DETECTADA !!!");
 
 //     // trava curta
-//     parar();
-//     delay(5);
+//     parar(); delay(5);
 
 //     // BORDA ESQUERDA
-
 //     if (linha_esq && !linha_dir) {
-
 //         Serial.println("BORDA ESQUERDA");
 
 //         // micro-recuo angular
@@ -272,9 +234,7 @@ void iSeeYou() { // estratégia número 4 no controle
 //     }
 
 //     // BORDA DIREITA
-
 //     else if (linha_dir && !linha_esq) {
-
 //         Serial.println("BORDA DIREITA");
 
 //         // micro-recuo angular
@@ -287,9 +247,7 @@ void iSeeYou() { // estratégia número 4 no controle
 //     }
 
 //     // BORDA FRONTAL
-
 //     else {
-
 //         Serial.println("BORDA FRONTAL");
 
 //         // recuo curto
@@ -310,7 +268,6 @@ void iSeeYou() { // estratégia número 4 no controle
 //     }
 
 //     parar();
-
 //     return true;
 // }
 
