@@ -94,6 +94,7 @@ void loop() {
           SeekAndDestroy_R();
         break; 
       }
+      Serial.println("-> sumo on");
     }
     else { // robô inicia caindo aqui
       // pixels.clear();
