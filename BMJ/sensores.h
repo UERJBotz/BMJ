@@ -17,7 +17,7 @@ union leitura {
     bool arr[3];
     struct {
         bool esq, centro, dir;
-    }
+    };
 }; //! usar
 
 int leitura[3]; //! mudar tipo

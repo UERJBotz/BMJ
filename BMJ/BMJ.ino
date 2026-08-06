@@ -56,12 +56,11 @@ void loop() {
         Serial.println("-> sumo stop"); 
         return;
     }
- 
     else if (IR.prepare()) { // número 1 no controle
       // setar_cor_leds(255,255,0);
       // pixels.show();
       digitalWrite(LED_PIN, HIGH);
-      delay(20);      
+      delay(20);
       parar();
       Serial.println("-> sumo prepare"); 
     }
@@ -71,7 +70,7 @@ void loop() {
         digitalWrite(LED_PIN,!digitalRead(LED_PIN));
         delay(50);
       }
-      Serial.println("-> sumo start"); 
+      Serial.println("-> sumo start");
     } 
     
     else if (IR.on()) { // número 2 no controle
@@ -96,7 +95,6 @@ void loop() {
         break; 
       }
     }
-
     else { // robô inicia caindo aqui
       // pixels.clear();
       // pixels.show();
@@ -107,7 +105,8 @@ void loop() {
         digitalWrite(LED_PIN, HIGH);
         delay(100);
         digitalWrite(LED_PIN, LOW);      
-      } else return;
+        return;
+      }
       Serial.println("-> sumo off"); 
     }
   } 
