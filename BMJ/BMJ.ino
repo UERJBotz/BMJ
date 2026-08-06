@@ -88,14 +88,17 @@ void loop() {
 
         case 5:
           paraTras();
+          delay(50);
           break;
 
         case 6:
           SeekAndDestroy_L();
+          delay(50);
          break;
 
         case 7:
           SeekAndDestroy_R();
+          delay(50);
         break; 
       }
       Serial.println("-> sumo on"); 

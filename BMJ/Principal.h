@@ -28,9 +28,9 @@ float D = 0;
 float PID = 0;
 
 // Somente PD 
-float Kp = 140.0;
+float Kp = 180.0;
 float Ki = 0.0;
-float Kd = 0.0;
+float Kd = 20.0;
 // Para a melhor calibração das constantes, deve-se:
 // -> desligar Kd (Kd = 0)
 // -> ir aumentando Kp até obter a resposta rápida e oscilatória
@@ -67,25 +67,20 @@ void calculoErroAngular() {
     int ativos = 0;
 
     for (int i = 0; i < 3; i++) {
-
         if (leitura[i]) {
-
             soma_pesos += peso[i];
             ativos++;
         }
     }
 
     if (ativos > 0) {
-
         erro_angular = soma_pesos / ativos;
-
     } else {
-
         // mantém direção anterior
         if (erro_angular >= 0)
-            erro_angular = 1.5;
+            erro_angular = 2.5;
         else
-            erro_angular = -1.5;
+            erro_angular = -2.5;
     }
 }
 
@@ -146,14 +141,10 @@ estadoPendulo varreduraPendular(estadoPendulo estadoAtual)
 // FULL ATTACK
 
 bool fullAttackDetectado() {
-
     // frontal detectado
     if (leitura[0] && leitura[1] && leitura[2]   ) {
-
         ataque_confirmado++;
-
     } else {
-
         ataque_confirmado = 0;
     }
 
@@ -162,44 +153,36 @@ bool fullAttackDetectado() {
 }
 
 // TARGET TRACKER PRINCIPAL
-
 void iSeeYou() { // estratégia número 4 no controle
-    //if(evitarBorda()) return;
+    #define VEL_MAX_PID 850
+    // if(evitarBorda()) return;
+
     leituraSensores();
 
-    // SEM ALVO -> VARREDURA PENDULAR
-
-    if (!leitura[0] && !leitura[1] && !leitura[2]) {
-        
-        estadoAtual = varreduraPendular(estadoAtual);
-
-        return;
-    }
+    // // SEM ALVO -> VARREDURA PENDULAR
+    if (!leitura[0] && !leitura[1] && !leitura[2])
+    // if (!leitura[0] && !leitura[1] && !leitura[2]) {
+    //     // mover(VEL_SEEK, -VEL_SEEk);
+    //     // SeekAndDestroy_R();
+    //     estadoAtual = varreduraPendular(estadoAtual);
+    //     return;
+    // }
 
     // OS 3 SENSORES -> FULL ATTACK
-
     if (fullAttackDetectado()) {
-
         mover(1023, 1023);
-
         return;
     }
 
     // COM ALVO -> PID ANGULAR
-
     pid();
 
-    int velocidade_esq =
-        vel_base - PID;
-
-    int velocidade_dir =
-        vel_base + PID;
-
-    velocidade_esq =
-        constrain(velocidade_esq, -800, 800);
-
-    velocidade_dir =
-        constrain(velocidade_dir, -800, 800);
+    int velocidade_esq = vel_base + PID;
+    int velocidade_dir = vel_base - PID;
+    velocidade_esq = constrain(velocidade_esq, -VEL_MAX_PID,
+                                                VEL_MAX_PID);
+    velocidade_dir = constrain(velocidade_dir, -VEL_MAX_PID,
+                                                VEL_MAX_PID);
 
     mover(velocidade_esq, velocidade_dir);
 }

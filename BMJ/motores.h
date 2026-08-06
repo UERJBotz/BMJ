@@ -4,10 +4,10 @@
 #define PWM_MAX 1023
 
 #include "placa.h"
-#define roda_esq_m1 MA2
-#define roda_esq_m2 MA1
-#define roda_dir_m1 MB2
-#define roda_dir_m2 MB1
+#define roda_esq_m1 MB1
+#define roda_esq_m2 MB2
+#define roda_dir_m1 MA1
+#define roda_dir_m2 MA2
 
 void motor(uint8_t m1, uint8_t m2, int16_t vel);
 
