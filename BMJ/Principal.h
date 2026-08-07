@@ -28,7 +28,7 @@ float D = 0;
 float PID = 0;
 
 // Somente PD 
-float Kp = 180.0;
+float Kp = 200.0;
 float Ki = 0.0;
 float Kd = 20.0;
 // Para a melhor calibração das constantes, deve-se:
@@ -42,7 +42,7 @@ unsigned long ultimo_pendulo = 0;
 
 estadoPendulo estadoAtual = DIREITA;
  
-const int tempo_pendulo = 150; //ms
+const int tempo_pendulo = 250; //ms
 
 
 // quantidade de ciclos consecutivos
@@ -75,12 +75,6 @@ void calculoErroAngular() {
 
     if (ativos > 0) {
         erro_angular = soma_pesos / ativos;
-    } else {
-        // mantém direção anterior
-        if (erro_angular >= 0)
-            erro_angular = 2.5;
-        else
-            erro_angular = -2.5;
     }
 }
 
@@ -159,10 +153,24 @@ void iSeeYou() { // estratégia número 4 no controle
 
     leituraSensores();
 
+    // SEM ALVO -> BUSCA NA ÚLTIMA DIREÇÃO
+    if (!leitura[0] && !leitura[1] && !leitura[2]) {
+
+        if (erro_angular > 0) {
+            mover(500, -500);
+        }
+        else if (erro_angular < 0) {
+            mover(-500, 500);
+        }
+        else {
+            mover(500, -500);
+        }
+
+        return;
+    }
     // // SEM ALVO -> VARREDURA PENDULAR
-    if (!leitura[0] && !leitura[1] && !leitura[2])
     // if (!leitura[0] && !leitura[1] && !leitura[2]) {
-    //     // mover(VEL_SEEK, -VEL_SEEk);
+    //     // mover(VEL_SEEK, -VEL_SEEK);
     //     // SeekAndDestroy_R();
     //     estadoAtual = varreduraPendular(estadoAtual);
     //     return;
