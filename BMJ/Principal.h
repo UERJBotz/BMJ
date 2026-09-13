@@ -2,6 +2,7 @@
 #define Principal_H
 
 #include "sensores.h"
+#include "Estrategias.h"
 
 enum estadoPendulo {
     DIREITA,
@@ -44,6 +45,12 @@ estadoPendulo estadoAtual = DIREITA;
  
 const int tempo_pendulo = 250; //ms
 
+const int tempo_devagar = 500; //ms
+unsigned long inicio_devagar = 0; //início devagar 
+const int VEL_DEVAGAR = 250;
+
+const int tempo_chegada = 500; //ms
+unsigned long inicio_MM = 0; //início Mad Max
 
 // quantidade de ciclos consecutivos
 // detectando frontal
@@ -147,7 +154,7 @@ bool fullAttackDetectado() {
 }
 
 // TARGET TRACKER PRINCIPAL
-void iSeeYou() { // estratégia número 4 no controle
+void Perseguir() { // estratégia número 4 no controle
     #define VEL_MAX_PID 850
     // if(evitarBorda()) return;
 
@@ -163,7 +170,7 @@ void iSeeYou() { // estratégia número 4 no controle
             mover(-500, 500);
         }
         else {
-            mover(500, -500);
+            estadoAtual = varreduraPendular(estadoAtual);
         }
 
         return;
@@ -193,6 +200,35 @@ void iSeeYou() { // estratégia número 4 no controle
                                                 VEL_MAX_PID);
 
     mover(velocidade_esq, velocidade_dir);
+}
+
+void iniciarMMPerseguir() {
+    inicio_MM = millis();
+}
+
+void iniciarDevagarPerseguir() {
+    inicio_devagar = millis();
+}
+
+void MMPerseguir() {
+    if (millis() - inicio_MM < tempo_chegada) {
+        MadMax(); 
+    } else {
+        Perseguir(); 
+    }
+}
+
+void DevagarPerseguir() {
+    if (millis() - inicio_devagar < tempo_devagar) {
+        leituraSensores();
+        if (leitura[0] || leitura[1] || leitura[2]) {
+            Perseguir(); 
+        } else {
+            mover(VEL_DEVAGAR, VEL_DEVAGAR); 
+        }
+    } else {
+        Perseguir(); 
+    }
 }
 
 // bool evitarBorda() {

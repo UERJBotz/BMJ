@@ -1,9 +1,9 @@
 /*
   BMJ
-  29/07/2026, para a RIW;
+  12/09/2026, para a RCX;
   Modo AUTÔNOMO usando SumoIR;
 
-  https://github.com/Jgbcruz/BMJ
+  https://github.com/UERJBotz/BMJ
 */
 
 
@@ -71,6 +71,8 @@ void loop() {
         digitalWrite(LED_PIN,!digitalRead(LED_PIN));
         delay(50);
       }
+      iniciarMMPerseguir();
+      iniciarDevagarPerseguir();
       Serial.println("-> sumo start"); 
     } 
     
@@ -81,25 +83,35 @@ void loop() {
         switch (strategy) {
         default: //fallthrough
         case 4:
-          iSeeYou();
+          Perseguir(); //Somente PID, usando ultimo erro para escolher lado de giro
           digitalWrite(LED_PIN, !digitalRead(LED_PIN));
           delay(50);
           break;
 
         case 5:
-          paraTras();
+          MadMax(); // Mad Max 
           delay(50);
           break;
 
         case 6:
-          SeekAndDestroy_L();
+          SeekAndDestroy_L(); // Estratégia de giro para a esquerda e atacar quando os sensores veem (sem PID)
           delay(50);
          break;
 
         case 7:
-          SeekAndDestroy_R();
+          SeekAndDestroy_R(); // Estratégia de giro para a direita e atacar quando os sensores veem (sem PID)
           delay(50);
-        break; 
+        break;
+
+        case 8:
+          MMPerseguir();
+          delay(50); 
+        break;
+
+        case 9:
+          DevagarPerseguir(); // Ir devagar e depois ir rápido
+          delay(50);
+        break;
       }
       Serial.println("-> sumo on"); 
     }
@@ -109,7 +121,7 @@ void loop() {
       // pixels.show();
       digitalWrite(LED_PIN, LOW);
       int cmd = IR.read();
-      if (cmd >= 4 && cmd <= 7) { 
+      if (cmd >= 4 && cmd <= 9) { 
         strategy = cmd;
         digitalWrite(LED_PIN, HIGH);
         delay(100);
