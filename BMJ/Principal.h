@@ -58,6 +58,9 @@ int ataque_confirmado = 0;
 
 const int ATAQUE_THRESHOLD = 2;
 
+void MadMax() { // estratégia número 5 no controle
+  mover(1023, 1023);
+}
 
 void leituraSensores() {
     leitura[0] = digitalRead(FEsq);

@@ -5,10 +5,6 @@
 
 #define VEL_SEEK 700
 
-void MadMax() { // estratégia número 5 no controle
-  mover(1023, 1023);
-}
-
 int EstadoAtual;
 
 void EstadoUpdate(){  // função que atualiza os estados

@@ -2,6 +2,7 @@
   BMJ
   12/09/2026, para a RCX;
   Modo AUTÔNOMO usando SumoIR;
+  Versão IRremote: 4.4.1
 
   https://github.com/UERJBotz/BMJ
 */
@@ -104,12 +105,12 @@ void loop() {
         break;
 
         case 8:
-          MMPerseguir();
+          MMPerseguir(); // Mad Max + Perseguir
           delay(50); 
         break;
 
         case 9:
-          DevagarPerseguir(); // Ir devagar e depois ir rápido
+          DevagarPerseguir(); // Ir devagar + Perseguir
           delay(50);
         break;
       }
