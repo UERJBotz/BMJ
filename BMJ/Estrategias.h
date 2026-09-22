@@ -1,25 +1,28 @@
 #ifndef Estrategias_H
 #define Estrategias_H
 
-#include "Principal.h"
 
 #define VEL_SEEK 700
 
+extern int leitura[3];
+void leituraSensores();
+
 int EstadoAtual;
 
-void EstadoUpdate(){  // função que atualiza os estados
+void EstadoUpdate() {
   leituraSensores();
   EstadoAtual = 1; // sem inimigo
-  if(leitura[1]){ //enxergando com o sensor frontal
-    EstadoAtual = 2;
-  } else if (!leitura[2] && leitura[0]){ // enxergando com o esquerdo
-    EstadoAtual = 3;
-  } else if (leitura[2] && !leitura[0]){ // enxergando com o direito
-    EstadoAtual = 4;
-  } else if(   leitura[0] 
-            && leitura[1]
-            && leitura[2]){ //enxergando com todos
-    EstadoAtual = 2;
+  if (leitura[0] && leitura[1] && leitura[2]) {
+    EstadoAtual = 2; // todos os sensores
+  }
+  else if (leitura[1]) {
+    EstadoAtual = 2; // sensor frontal
+  }
+  else if (!leitura[2] && leitura[0]) {
+    EstadoAtual = 3; // sensor esquerdo
+  }
+  else if (leitura[2] && !leitura[0]) {
+    EstadoAtual = 4; // sensor direito
   }
   else {
     EstadoAtual = 1; // sem inimigo

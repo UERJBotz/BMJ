@@ -1,6 +1,6 @@
 /*
   BMJ
-  12/09/2026, para a RCX;
+  22/09/2026, para a RCX;
   Modo AUTÔNOMO usando SumoIR;
   Versão IRremote: 4.4.1
 
@@ -62,7 +62,7 @@ void loop() {
       // setar_cor_leds(255,255,0);
       // pixels.show();
       digitalWrite(LED_PIN, HIGH);
-      delay(20);      
+      delay(30);      
       parar();
       Serial.println("-> sumo prepare"); 
     }
@@ -91,6 +91,7 @@ void loop() {
 
         case 5:
           MadMax(); // Mad Max 
+          digitalWrite(LED_PIN, !digitalRead(LED_PIN));
           delay(50);
           break;
 
@@ -106,11 +107,13 @@ void loop() {
 
         case 8:
           MMPerseguir(); // Mad Max + Perseguir
+          digitalWrite(LED_PIN, !digitalRead(LED_PIN));
           delay(50); 
         break;
 
         case 9:
           DevagarPerseguir(); // Ir devagar + Perseguir
+          digitalWrite(LED_PIN, !digitalRead(LED_PIN));
           delay(50);
         break;
       }

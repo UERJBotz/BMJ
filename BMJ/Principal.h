@@ -2,8 +2,7 @@
 #define Principal_H
 
 #include "sensores.h"
-#include "Estrategias.h"
-
+  
 enum estadoPendulo {
     DIREITA,
     MEIA_ESQUERDA,
@@ -29,7 +28,7 @@ float D = 0;
 float PID = 0;
 
 // Somente PD 
-float Kp = 200.0;
+float Kp = 190.0;
 float Ki = 0.0;
 float Kd = 20.0;
 // Para a melhor calibração das constantes, deve-se:
@@ -47,7 +46,7 @@ const int tempo_pendulo = 250; //ms
 
 const int tempo_devagar = 500; //ms
 unsigned long inicio_devagar = 0; //início devagar 
-const int VEL_DEVAGAR = 250;
+const int VEL_DEVAGAR = 100;
 
 const int tempo_chegada = 500; //ms
 unsigned long inicio_MM = 0; //início Mad Max
@@ -56,9 +55,9 @@ unsigned long inicio_MM = 0; //início Mad Max
 // detectando frontal
 int ataque_confirmado = 0;
 
-const int ATAQUE_THRESHOLD = 2;
+const int ATAQUE_THRESHOLD = 3;
 
-void MadMax() { // estratégia número 5 no controle
+void MadMax() { 
   mover(1023, 1023);
 }
 
@@ -108,38 +107,38 @@ void pid() {
 
 // VARREDURA PENDULAR
 
-estadoPendulo varreduraPendular(estadoPendulo estadoAtual)
-{
+// estadoPendulo varreduraPendular(estadoPendulo estadoAtual)
+// {
 
-    unsigned long agora = millis();
+//     unsigned long agora = millis();
 
-    if((agora-ultimo_pendulo) >= tempo_pendulo) {
+//     if((agora-ultimo_pendulo) >= tempo_pendulo) {
 
-        ultimo_pendulo = agora;
+//         ultimo_pendulo = agora;
 
-        switch(estadoAtual) {
+//         switch(estadoAtual) {
 
-            case DIREITA:
-                mover(350,-350);
-                return MEIA_ESQUERDA;
+//             case DIREITA:
+//                 mover(350,-350);
+//                 return MEIA_ESQUERDA;
 
-            case MEIA_ESQUERDA:
-                mover(-350,350);
-                return ESQUERDA;
+//             case MEIA_ESQUERDA:
+//                 mover(-350,350);
+//                 return ESQUERDA;
 
-            case ESQUERDA:
-                mover(-350,350);
-                return MEIA_DIREITA;
+//             case ESQUERDA:
+//                 mover(-350,350);
+//                 return MEIA_DIREITA;
 
-            case MEIA_DIREITA:
-                mover(350,-350);
-                return DIREITA;
-        }
-    }
+//             case MEIA_DIREITA:
+//                 mover(350,-350);
+//                 return DIREITA;
+//         }
+//     }
 
-    return estadoAtual;
+//     return estadoAtual;
 
-}
+// }
 
 
 // FULL ATTACK
@@ -158,7 +157,7 @@ bool fullAttackDetectado() {
 
 // TARGET TRACKER PRINCIPAL
 void Perseguir() { // estratégia número 4 no controle
-    #define VEL_MAX_PID 850
+    #define VEL_MAX_PID 900
     // if(evitarBorda()) return;
 
     leituraSensores();
@@ -167,13 +166,13 @@ void Perseguir() { // estratégia número 4 no controle
     if (!leitura[0] && !leitura[1] && !leitura[2]) {
 
         if (erro_angular > 0) {
-            mover(500, -500);
+            mover(400, -400);
         }
         else if (erro_angular < 0) {
-            mover(-500, 500);
+            mover(-400, 400);
         }
         else {
-            estadoAtual = varreduraPendular(estadoAtual);
+            mover(300, -300);
         }
 
         return;
@@ -222,18 +221,28 @@ void MMPerseguir() {
 }
 
 void DevagarPerseguir() {
-    if (millis() - inicio_devagar < tempo_devagar) {
-        leituraSensores();
-        if (leitura[0] || leitura[1] || leitura[2]) {
-            Perseguir(); 
-        } else {
-            mover(VEL_DEVAGAR, VEL_DEVAGAR); 
-        }
-    } else {
-        Perseguir(); 
-    }
-}
 
+    leituraSensores();
+
+    // Período inicial curto: anda para frente devagar
+    if (millis() - inicio_devagar < tempo_devagar) {
+        // Detectou o inimigo
+        if (leitura[0] || leitura[1] || leitura[2]) {
+            Perseguir();
+        }
+        else {
+            // Ainda não detectou: continua avançando
+            mover(VEL_DEVAGAR, VEL_DEVAGAR);
+        }
+
+    }
+    else {
+
+        // Tempo inicial acabou: passa para perseguição
+        Perseguir();
+    }
+
+}
 // bool evitarBorda() {
 
 //     bool linha_esq = digitalRead(linhaEsq);
