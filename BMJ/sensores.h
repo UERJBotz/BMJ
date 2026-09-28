@@ -1,5 +1,6 @@
 #ifndef Sensores_H
 #define Sensores_H
+#include <Arduino.h>
 
 //BMJ
 // ultima atualização 16/05/2026

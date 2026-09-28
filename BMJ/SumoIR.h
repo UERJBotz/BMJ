@@ -10,26 +10,26 @@
 #define SUMO_IR_H
 
 #include "Arduino.h"
-#include <IRremote.h>
+#include <IRremote.hpp> // API 4.x, conforme exemplos oficiais
 
 class SumoIR {
   private:
     int _pin = 15;
 
     // Decode info and data:
-    uint16_t      IN_cmd;
-    decode_type_t IN_protocol;
-    uint32_t      IN_data;
+    uint16_t      IN_cmd = 0;
+    decode_type_t IN_protocol = UNKNOWN;
+    uint32_t      IN_data = 0;
 
     // SUMO mode
     uint8_t _mode = SUMO_STOP;
 
-    int LED;
-    int LED_timeout;
-    bool LED_state_on;
-    uint16_t LED_dt;
+    int LED = -1;
+    unsigned long LED_timeout = 0; // instante da ultima alternancia
+    bool LED_state_on = true;
+    uint16_t LED_dt = 250;
 
-    bool DEBUG = true;
+    bool DEBUG = false;
 
     bool _change = false;
     bool _available = false;
@@ -47,12 +47,14 @@ class SumoIR {
     // Begin
     void begin(){ begin(_pin); }
     void begin(uint8_t pin){
-        if (_pin != pin) {
-            _pin = pin;
-            IR_IN.setReceivePin(_pin);
-        }
+        _pin = pin;
+        // Nao depender do pino escolhido durante construtores globais.
+        // Desabilita feedback automatico para nao disputar GPIO2 com BMJ.
+        IR_IN.begin(_pin, DISABLE_LED_FEEDBACK);
         pinMode(_pin, INPUT_PULLUP);
-        IR_IN.enableIRIn();
+        _mode = SUMO_STOP;
+        _available = _change = false;
+        command = -1;
     }
 
     bool available() { return _available; }
@@ -63,6 +65,7 @@ class SumoIR {
       LED = pin;
       LED_state_on = state_on;
       LED_dt = dt;
+      LED_timeout = millis();
       if (LED >= 0) {
         pinMode( LED, OUTPUT );
         digitalWrite( LED, !LED_state_on );
@@ -79,9 +82,9 @@ class SumoIR {
       } else if (_mode == SUMO_PREPARE) {
         if (command == 1) {
           digitalWrite(LED,LED_state_on);
-          LED_timeout = millis() + LED_dt;
-        } else if (millis() >= LED_timeout) {
-          LED_timeout = millis() + LED_dt;
+          LED_timeout = millis();
+        } else if (millis() - LED_timeout >= LED_dt) {
+          LED_timeout = millis();
           digitalWrite(LED,!digitalRead(LED));
         }
       }
@@ -94,13 +97,13 @@ class SumoIR {
       _change = false;
 
       if (IR_IN.decode()){
-        IR_IN.resume();
 
         uint8_t mode_before = _mode;
         
         IN_cmd      = IR_IN.decodedIRData.command;
         IN_protocol = IR_IN.decodedIRData.protocol;
         IN_data     = IR_IN.decodedIRData.decodedRawData;
+        IR_IN.resume();
         
         _available = true;
 
@@ -144,6 +147,7 @@ class SumoIR {
     }
 
     // return protocol
+    uint16_t rawCommand() { return IN_cmd; }
     decode_type_t protocol() { return IN_protocol; }
     String protocol_str()    { return protocol_str( IN_protocol ); }
     String protocol_str(decode_type_t p) {
@@ -177,7 +181,7 @@ class SumoIR {
 
     String str() {
       char buf[100];
-      sprintf( buf, ">> [%s] IR CMD: %d [ 0x%.8X ] [ %s ]\n", mode_str(), command, IN_data, protocol_str().c_str() );
+      snprintf( buf, sizeof(buf), ">> [%s] IR CMD: %d RAW_CMD: %u [ 0x%.8X ] [ %s ]\n", mode_str().c_str(), command, static_cast<unsigned int>(IN_cmd), static_cast<unsigned int>(IN_data), protocol_str().c_str() );
       return buf;
     }
 

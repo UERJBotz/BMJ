@@ -1,163 +1,151 @@
-/*
-  BMJ
-  22/09/2026, para a RCX;
-  Modo AUTÔNOMO usando SumoIR;
-  Versão IRremote: 4.4.1
 
-  https://github.com/UERJBotz/BMJ
-*/
-
-
-//#define PID_2222
-
+/* BMJ
+ * 28/09/2026 para a RCX
+ * IRremote=4.4.1, GPIO15, controle SONY/SAMSUNG conforme SumoIR
+ * 1=PREPARE, 2=START (somente depois de 1), 3=STOP, 4..9=estratégias
+ * https://github.com/UERJBotz/BMJ
+ */
 #include <Arduino.h>
 #include "SumoIR.h"
-
 #include "motores.h"
 #include "sensores.h"
 #include "Principal.h"
 #include "Estrategias.h"
-//#include "LEDFX.h"
 #include "placa.h"
-
 
 #define boot 0
 #define LED_PIN 2
-int strategy = 0;
+#ifndef BMJ_DIAGNOSTICO_IR
+#define BMJ_DIAGNOSTICO_IR 1
+#endif
 
 SumoIR IR;
+int strategy = 4;
+int modo_anterior = SumoIR::SUMO_STOP;
+unsigned long inicio_sinalizacao = 0;
+unsigned long duracao_sinalizacao = 0;
+unsigned long ultimo_status = 0;
+unsigned long quadros_ir = 0;
 
-void setup() {
-
-  Serial.begin(115200);
-
-  IR.begin(IR_PIN); 
-  
-  //pixels.begin();
-  //! motor.bip(5, 250, 2500); // motor bipa (x vezes, intervalo (ms), frequencia em Hz)
-
-  setupSensores();
-  setupMotores();
-
-  pinMode(boot, INPUT_PULLUP);
-  pinMode(LED_PIN, OUTPUT);
-
-  digitalWrite(LED_PIN, LOW);
-  Serial.println("Sistema iniciado no modo AUTO");
+void sinalizar(unsigned long duracao) {
+    inicio_sinalizacao = millis();
+    duracao_sinalizacao = duracao;
 }
 
+void atualizarLed() {
+    const bool base = IR.on() || IR.prepare();
+    const unsigned long dt = millis() - inicio_sinalizacao;
+    if (duracao_sinalizacao && dt < duracao_sinalizacao) {
+        // Selecionar em STOP acende; selecionar em PREPARE apaga brevemente.
+        digitalWrite(LED_PIN, ((dt / 100) % 2 == 0) ? !base : base);
+    } else {
+        duracao_sinalizacao = 0;
+        digitalWrite(LED_PIN, base);
+    }
+}
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, HIGH);
+    pinMode(boot, INPUT_PULLUP);
+    Serial.println("[BOOT] BMJ IR-recovery 2");
+
+    setupSensores();
+    setupMotores(); // somente GPIO; nenhum canal PWM e criado aqui
+    parar();        // freio por GPIO enquanto PWM ainda nao foi configurado
+    Serial.println("[BOOT] GPIO dos motores pronto; PWM adiado ate START");
+
+    IR.setLed(-1, true, 250); // BMJ e o unico responsavel pelo LED GPIO2
+    IR.debug(false);         // log detalhado controlado abaixo, fora da biblioteca
+    IR.begin(IR_PIN);        // configura explicitamente GPIO15 durante setup
+    modo_anterior = IR.mode();
+    Serial.println("[BOOT] IR pronto: GPIO15; 1 prepara, 2 inicia, 3 para");
+    sinalizar(400);          // duas piscadas sem impedir recepcao
+}
 
 void loop() {
+    // Ler exatamente uma vez. Um segundo update apagaria o comando do ciclo.
+    const int cmd = IR.update();
+    const int modo = IR.mode();
+    const bool mudou = modo != modo_anterior;
 
-    IR.update();
+    if (IR.available()) {
+        ++quadros_ir; // inclui protocolos nao mapeados; available nao significa cmd valido
+#if BMJ_DIAGNOSTICO_IR
+        Serial.println(IR.str());
+#endif
+    }
 
-    if (IR.stop()) {
-        digitalWrite(LED_PIN, LOW);
+    // STOP e tratado tambem quando o estado ja era STOP.
+    if (cmd == 3 || (mudou && modo == SumoIR::SUMO_STOP)) {
         parar();
-        Serial.println("-> sumo stop"); 
-        return;
+        reiniciarPerseguicao();
+        duracao_sinalizacao = 0;
+        Serial.println("[ESTADO] STOP");
     }
- 
-    else if (IR.prepare()) { // número 1 no controle
-      // setar_cor_leds(255,255,0);
-      // pixels.show();
-      digitalWrite(LED_PIN, HIGH);
-      delay(30);      
-      parar();
-      Serial.println("-> sumo prepare"); 
+
+    if (mudou && modo == SumoIR::SUMO_PREPARE) {
+        parar();
+        Serial.println("[ESTADO] PREPARE: aguardando 2");
     }
-    
-    else if (IR.start()) {
-      for(int i=0;i<6;i++){
-        digitalWrite(LED_PIN,!digitalRead(LED_PIN));
-        delay(50);
-      }
-      iniciarMMPerseguir();
-      iniciarDevagarPerseguir();
-      Serial.println("-> sumo start"); 
-    } 
-    
-    else if (IR.on()) { // número 2 no controle
-      // setar_cor_leds(0,255,0);
-      // pixels.show();
-        digitalWrite(LED_PIN, HIGH);      
+
+  if (!IR.on() && IR.available() && cmd >= 4 && cmd <= 9) {
+    strategy = cmd;
+
+    reiniciarPerseguicao();
+
+    if (strategy == 6) {
+        iniciarMaquinaEstados(false); // estratégia para esquerda
+    }
+    else if (strategy == 7) {
+        iniciarMaquinaEstados(true);  // estratégia para direita
+    }
+
+    sinalizar(100);
+    Serial.println("[SELECAO] estrategia aceita; numero em CMD acima");
+    }
+
+    if (mudou && modo == SumoIR::SUMO_START) {
+        Serial.println("[START] configurando PWM de 10 bits");
+        configurarPWMMotores();
+        Serial.println("[START] rotina PWM retornou; executando estrategia");
+        iniciarMMPerseguir();
+        iniciarDevagarPerseguir();
+        duracao_sinalizacao = 0;
+    }
+
+    if (IR.on()) {
         switch (strategy) {
-        default: //fallthrough
-        case 4:
-          Perseguir(); //Somente PID, usando ultimo erro para escolher lado de giro
-          digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-          delay(50);
-          break;
-
-        case 5:
-          MadMax(); // Mad Max 
-          digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-          delay(50);
-          break;
-
-        case 6:
-          SeekAndDestroy_L(); // Estratégia de giro para a esquerda e atacar quando os sensores veem (sem PID)
-          delay(50);
-         break;
-
-        case 7:
-          SeekAndDestroy_R(); // Estratégia de giro para a direita e atacar quando os sensores veem (sem PID)
-          delay(50);
-        break;
-
-        case 8:
-          MMPerseguir(); // Mad Max + Perseguir
-          digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-          delay(50); 
-        break;
-
-        case 9:
-          DevagarPerseguir(); // Ir devagar + Perseguir
-          digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-          delay(50);
-        break;
-      }
-      Serial.println("-> sumo on"); 
+            default:
+            case 4: Perseguir(); break;
+            case 5: 
+                MadMax();
+                delay(5); 
+                break;
+            case 6: 
+                SeekAndDestroy_L();
+                delay(5); 
+                break;
+            case 7: 
+                SeekAndDestroy_R();
+                delay(5); 
+                break;
+            case 8: MMPerseguir(); break;
+            case 9: DevagarPerseguir(); break;
+        }
     }
-
-    else { // robô inicia caindo aqui
-      // pixels.clear();
-      // pixels.show();
-      digitalWrite(LED_PIN, LOW);
-      int cmd = IR.read();
-      if (cmd >= 4 && cmd <= 9) { 
-        strategy = cmd;
-        digitalWrite(LED_PIN, HIGH);
-        delay(100);
-        digitalWrite(LED_PIN, LOW);      
-      } else return;
-      Serial.println("-> sumo off"); 
+#if BMJ_DIAGNOSTICO_IR
+    else if (millis() - ultimo_status >= 2000) {
+        ultimo_status = millis();
+        char status[100];
+        snprintf(status, sizeof(status), "[VIVO] modo=%d quadros=%lu entradaIR=%d",
+                 modo, quadros_ir, digitalRead(IR_PIN));
+        Serial.println(status);
     }
-  } 
-
-// void strategySelection() {
-//   int cmd = IR.read();
-//   if (cmd >= 4 && cmd <= 7) { 
-//     strategy = cmd;
-//   } else return;
-
-//   if (cmd <= 7) {
-//     const int num_leds = cmd % 8;
-//     for(uint8_t i = 0; i < num_leds; i++) {
-//       switch ((cmd-3) % 6) { 
-//         case 0: pixels.setPixelColor(i, pixels.Color(255, 50,  50  )); break; // Vermelho claro
-//         case 1: pixels.setPixelColor(i, pixels.Color(0,   255, 100 )); break; // Verde com toque de azul
-//         case 2: pixels.setPixelColor(i, pixels.Color(255, 0,   180 )); break; // Magenta
-//         case 3: pixels.setPixelColor(i, pixels.Color(255, 140, 0   )); break; // Laranja
-//         case 4: pixels.setPixelColor(i, pixels.Color(100, 200, 255 )); break; // Azul claro
-//         case 5: pixels.setPixelColor(i, pixels.Color(180, 255, 0   )); break; // Verde-amarelado
-//       } pixels.show();
-//     }
-//     delay(80);
-//     for(uint8_t i = 0; i < num_leds; i++) { 
-//       pixels.setPixelColor(i, pixels.Color(0, 0, 0)); // Desliga os LEDs
-//       pixels.show();
-//     }
-//     delay(80);
-//   }
-// }
+#endif
+    modo_anterior = modo;
+    atualizarLed();
+    // Pausa cooperativa curta. Nao e uma espera de 50 ms por decisao do PD.
+    delay(1);
+}

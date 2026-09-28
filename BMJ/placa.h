@@ -1,3 +1,5 @@
+#ifndef BMJ_PLACA_H
+#define BMJ_PLACA_H
 /* ! os sensores do meio na frente tão ligados com esses "pinos" (não usar) ! */
 #define S0 VP
 #define S1 VIN
@@ -21,3 +23,5 @@
 #define MA2 18
 #define MB1 4
 #define MB2 23
+
+#endif

@@ -1,14 +1,9 @@
 #ifndef Principal_H
 #define Principal_H
 
+#include <Arduino.h>
+#include "motores.h"
 #include "sensores.h"
-  
-enum estadoPendulo {
-    DIREITA,
-    MEIA_ESQUERDA,
-    ESQUERDA,
-    MEIA_DIREITA
-};
 
 // Leitura dos Sensores
 // [0] = Frente Esquerda
@@ -28,25 +23,34 @@ float D = 0;
 float PID = 0;
 
 // Somente PD 
-float Kp = 190.0;
+float Kp = 205.0; // ponto inicial experimental, nao um valor otimo medido
 float Ki = 0.0;
 float Kd = 20.0;
-// Para a melhor calibração das constantes, deve-se:
-// -> desligar Kd (Kd = 0)
-// -> ir aumentando Kp até obter a resposta rápida e oscilatória
-// -> ir aumentando Kd até parar a resposta oscilatória e manter a agressividade
+// Escala preservada: -2 corresponde ao sensor a -30 graus e +2 a +30.
+// D e normalizado para uma amostra de 5 ms; nao usa graus/segundo.
+const unsigned long PERIODO_PID_MS = 5;
+const int VEL_MAX_PID = 900;
+const int VEL_LATERAL = 250;
+const int VEL_CENTRAL = 650;
+const int VEL_BUSCA = 400;
+const unsigned long TEMPO_CONFIRMA_ATAQUE_MS = 15;
+int ultima_direcao = 1; // padrao: direita; atualizada somente com visao lateral inequivoca
+bool derivada_valida = false;
+bool controle_iniciado = false;
+bool confirmando_ataque = false;
+bool devagar_encerrado = false;
+unsigned long inicio_ataque = 0;
+unsigned long ultimo_controle = 0;
 
 unsigned long last_time = 0;
 
 unsigned long ultimo_pendulo = 0;
-
-estadoPendulo estadoAtual = DIREITA;
  
 const int tempo_pendulo = 250; //ms
 
-const int tempo_devagar = 500; //ms
+const int tempo_devagar = 600; //ms
 unsigned long inicio_devagar = 0; //início devagar 
-const int VEL_DEVAGAR = 100;
+const int VEL_DEVAGAR = 250;
 
 const int tempo_chegada = 500; //ms
 unsigned long inicio_MM = 0; //início Mad Max
@@ -55,7 +59,18 @@ unsigned long inicio_MM = 0; //início Mad Max
 // detectando frontal
 int ataque_confirmado = 0;
 
+// Mantido como contador diagnostico saturado, sem depender da frequencia do loop.
 const int ATAQUE_THRESHOLD = 3;
+
+// Chamar no START e ao trocar de estrategia; nao chamar a cada loop.
+void reiniciarPerseguicao() {
+    erro_angular = erro_anterior = P = I = D = PID = 0;
+    ultima_direcao = 1;
+    derivada_valida = controle_iniciado = confirmando_ataque = false;
+    ataque_confirmado = 0;
+    devagar_encerrado = false;
+    last_time = ultimo_controle = millis();
+}
 
 void MadMax() { 
   mover(1023, 1023);
@@ -70,7 +85,7 @@ void leituraSensores() {
 void calculoErroAngular() {
 
     // geometria angular
-    float peso[3] = {-2.0, 0.0, 2.0};
+    const float peso[3] = {-2.0f, 0.0f, 2.0f};
 
     float soma_pesos = 0;
     int ativos = 0;
@@ -82,133 +97,102 @@ void calculoErroAngular() {
         }
     }
 
-    if (ativos > 0) {
+    if (leitura[0] && leitura[2] && !leitura[1]) {
+        // 101 e ambiguo: nao assumir alvo centralizado nem atualizar a memoria.
+        erro_angular = static_cast<float>(ultima_direcao);
+    } else if (ativos > 0) {
         erro_angular = soma_pesos / ativos;
+        if (erro_angular > 0) ultima_direcao = 1;
+        else if (erro_angular < 0) ultima_direcao = -1;
     }
 }
 
 // PID
 
 void pid() {
-
     calculoErroAngular();
-
+    const unsigned long agora = millis();
+    const unsigned long dt = agora - last_time;
     P = erro_angular;
-
-    // Integral desligada
-    I += erro_angular;
-
-    D = erro_angular - erro_anterior;
-
+    // Ki=0: nao acumular uma integral inutil indefinidamente.
+    if (Ki != 0.0f && derivada_valida && dt > 0) {
+        I = constrain(I + erro_angular * (dt / 5.0f), -100.0f, 100.0f);
+    } else if (Ki == 0.0f) I = 0;
+    D = (derivada_valida && dt > 0 && dt <= 100)
+        ? (erro_angular - erro_anterior) * (5.0f / dt) : 0.0f;
     PID = (Kp * P) + (Ki * I) + (Kd * D);
-
     erro_anterior = erro_angular;
+    last_time = agora;
+    derivada_valida = true;
 }
-
-// VARREDURA PENDULAR
-
-// estadoPendulo varreduraPendular(estadoPendulo estadoAtual)
-// {
-
-//     unsigned long agora = millis();
-
-//     if((agora-ultimo_pendulo) >= tempo_pendulo) {
-
-//         ultimo_pendulo = agora;
-
-//         switch(estadoAtual) {
-
-//             case DIREITA:
-//                 mover(350,-350);
-//                 return MEIA_ESQUERDA;
-
-//             case MEIA_ESQUERDA:
-//                 mover(-350,350);
-//                 return ESQUERDA;
-
-//             case ESQUERDA:
-//                 mover(-350,350);
-//                 return MEIA_DIREITA;
-
-//             case MEIA_DIREITA:
-//                 mover(350,-350);
-//                 return DIREITA;
-//         }
-//     }
-
-//     return estadoAtual;
-
-// }
 
 
 // FULL ATTACK
 
 bool fullAttackDetectado() {
-    // frontal detectado
-    if (leitura[0] && leitura[1] && leitura[2]   ) {
-        ataque_confirmado++;
-    } else {
+    if (!(leitura[0] && leitura[1] && leitura[2])) {
+        confirmando_ataque = false;
         ataque_confirmado = 0;
+        return false;
     }
-
-    // inimigo muito próximo
-    return (ataque_confirmado >= ATAQUE_THRESHOLD); 
+    if (!confirmando_ataque) {
+        inicio_ataque = millis();
+        confirmando_ataque = true;
+    }
+    if (ataque_confirmado < ATAQUE_THRESHOLD) ++ataque_confirmado;
+    return (millis() - inicio_ataque >= TEMPO_CONFIRMA_ATAQUE_MS);
 }
 
 // TARGET TRACKER PRINCIPAL
-void Perseguir() { // estratégia número 4 no controle
-    #define VEL_MAX_PID 900
-    // if(evitarBorda()) return;
-
+void Perseguir() { // estrategia numero 4 no controle
+    const unsigned long agora = millis();
+    // Sem delay: o loop continua livre para receber STOP pelo IR.
+    if (controle_iniciado && agora - ultimo_controle < PERIODO_PID_MS) return;
+    // Nao aproveitar confirmacoes/derivadas anteriores a uma pausa longa.
+    if (controle_iniciado && agora - ultimo_controle > 100) {
+        confirmando_ataque = false;
+        ataque_confirmado = 0;
+        derivada_valida = false;
+    }
+    ultimo_controle = agora;
+    controle_iniciado = true;
     leituraSensores();
+    const bool ataque = fullAttackDetectado(); // tambem zera ao perder alvo
 
-    // SEM ALVO -> BUSCA NA ÚLTIMA DIREÇÃO
     if (!leitura[0] && !leitura[1] && !leitura[2]) {
-
-        if (erro_angular > 0) {
-            mover(400, -400);
-        }
-        else if (erro_angular < 0) {
-            mover(-400, 400);
-        }
-        else {
-            mover(300, -300);
-        }
-
+        derivada_valida = false; // sem impulso D de uma amostra antiga na retomada
+        I = 0;
+        mover(ultima_direcao * VEL_BUSCA, -ultima_direcao * VEL_BUSCA);
         return;
     }
-    // // SEM ALVO -> VARREDURA PENDULAR
-    // if (!leitura[0] && !leitura[1] && !leitura[2]) {
-    //     // mover(VEL_SEEK, -VEL_SEEK);
-    //     // SeekAndDestroy_R();
-    //     estadoAtual = varreduraPendular(estadoAtual);
-    //     return;
-    // }
 
-    // OS 3 SENSORES -> FULL ATTACK
-    if (fullAttackDetectado()) {
+    // Atualiza erro inclusive durante ataque maximo.
+    pid();
+    if (ataque) {
         mover(1023, 1023);
         return;
     }
 
-    // COM ALVO -> PID ANGULAR
-    pid();
+    // Reduz translacao quando o alvo esta fora do centro: curva mais fechada.
+    // Aumenta avanco quando somente o frontal detecta ou os tres detectam.
+    int base = vel_base;
+    if (!leitura[1]) base = VEL_LATERAL;
+    else if (leitura[0] == leitura[2]) base = VEL_CENTRAL;
 
-    int velocidade_esq = vel_base + PID;
-    int velocidade_dir = vel_base - PID;
-    velocidade_esq = constrain(velocidade_esq, -VEL_MAX_PID,
-                                                VEL_MAX_PID);
-    velocidade_dir = constrain(velocidade_dir, -VEL_MAX_PID,
-                                                VEL_MAX_PID);
-
+    int velocidade_esq = base + PID;
+    int velocidade_dir = base - PID;
+    velocidade_esq = constrain(velocidade_esq, -VEL_MAX_PID, VEL_MAX_PID);
+    velocidade_dir = constrain(velocidade_dir, -VEL_MAX_PID, VEL_MAX_PID);
     mover(velocidade_esq, velocidade_dir);
 }
 
 void iniciarMMPerseguir() {
+    reiniciarPerseguicao();
     inicio_MM = millis();
 }
 
 void iniciarDevagarPerseguir() {
+    reiniciarPerseguicao();
     inicio_devagar = millis();
 }
 
@@ -225,9 +209,10 @@ void DevagarPerseguir() {
     leituraSensores();
 
     // Período inicial curto: anda para frente devagar
-    if (millis() - inicio_devagar < tempo_devagar) {
+    if (!devagar_encerrado && millis() - inicio_devagar < tempo_devagar) {
         // Detectou o inimigo
         if (leitura[0] || leitura[1] || leitura[2]) {
+            devagar_encerrado = true;
             Perseguir();
         }
         else {
