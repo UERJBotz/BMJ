@@ -1,7 +1,5 @@
-
 /* BMJ
- * 28/09/2026 para a RCX
- * IRremote=4.4.1, GPIO15, controle SONY/SAMSUNG conforme SumoIR
+ * IRremote=4.4.1
  * 1=PREPARE, 2=START (somente depois de 1), 3=STOP, 4..9=estratégias
  * https://github.com/UERJBotz/BMJ
  */
@@ -9,6 +7,7 @@
 #include "SumoIR.h"
 #include "motores.h"
 #include "sensores.h"
+#include "LEDFX.h"
 #include "Principal.h"
 #include "Estrategias.h"
 #include "placa.h"
@@ -70,6 +69,16 @@ void loop() {
     const int modo = IR.mode();
     const bool mudou = modo != modo_anterior;
 
+    if (IR.off()) {
+      parar();
+      mostra_estrategia_no_led(strategy);
+    }
+    if (IR.prepare()) {
+      leituraSensores();
+      mostra_sensores_no_led(leitura);
+      parar();
+    }
+
     if (IR.available()) {
         ++quadros_ir; // inclui protocolos nao mapeados; available nao significa cmd valido
 #if BMJ_DIAGNOSTICO_IR
@@ -90,25 +99,24 @@ void loop() {
         Serial.println("[ESTADO] PREPARE: aguardando 2");
     }
 
-  if (!IR.on() && IR.available() && cmd >= 4 && cmd <= 9) {
-    strategy = cmd;
+    if (!IR.on() && IR.available() && cmd >= 4 && cmd <= 9) {
+      strategy = cmd;
 
-    reiniciarPerseguicao();
+      reiniciarPerseguicao();
 
-    if (strategy == 6) {
-        iniciarMaquinaEstados(false); // estratégia para esquerda
-    }
-    else if (strategy == 7) {
-        iniciarMaquinaEstados(true);  // estratégia para direita
-    }
+      if (strategy == 6) {
+          iniciarMaquinaEstados(false); // estratégia para esquerda
+      }
+      else if (strategy == 7) {
+          iniciarMaquinaEstados(true);  // estratégia para direita
+      }
 
-    sinalizar(100);
-    Serial.println("[SELECAO] estrategia aceita; numero em CMD acima");
+      sinalizar(100);
+      Serial.println("[SELECAO] estrategia aceita; numero em CMD acima");
     }
 
     if (mudou && modo == SumoIR::SUMO_START) {
         Serial.println("[START] configurando PWM de 10 bits");
-        configurarPWMMotores();
         Serial.println("[START] rotina PWM retornou; executando estrategia");
         iniciarMMPerseguir();
         iniciarDevagarPerseguir();
@@ -119,17 +127,17 @@ void loop() {
         switch (strategy) {
             default:
             case 4: Perseguir(); break;
-            case 5: 
+            case 5:
                 MadMax();
-                delay(5); 
+                delay(5);
                 break;
-            case 6: 
+            case 6:
                 SeekAndDestroy_L();
-                delay(5); 
+                delay(5);
                 break;
-            case 7: 
+            case 7:
                 SeekAndDestroy_R();
-                delay(5); 
+                delay(5);
                 break;
             case 8: MMPerseguir(); break;
             case 9: DevagarPerseguir(); break;

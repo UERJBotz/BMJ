@@ -19,16 +19,21 @@ void setar_cor_leds(uint8_t r, uint8_t g, uint8_t b) {
 void mostra_sensores_no_led(int leitura[]) {
   setar_cor_leds(3, 5, 3); // Define a cor padrão para todos os LEDs
 
+  if (leitura[0]) pixels.setPixelColor(6, azul);
   if (leitura[0]) pixels.setPixelColor(5, azul);
-  if (leitura[1]) pixels.setPixelColor(4, azul);
-  if (leitura[2]) pixels.setPixelColor(3, azul);
+  if (leitura[1]) pixels.setPixelColor(4, verde);
+  if (leitura[1]) pixels.setPixelColor(3, verde);
+  if (leitura[2]) pixels.setPixelColor(2, azul);
+  if (leitura[2]) pixels.setPixelColor(1, azul);
 
   pixels.show();
 }
 void mostra_estrategia_no_led(int num_estrategia) {
   setar_cor_leds(3, 5, 3);
+
   const int quantidade = constrain(num_estrategia - 3, 0, NUMPIXELS);
   for (int i = 0; i < quantidade; i++) pixels.setPixelColor(i, verde);
+
   pixels.show();
 }
 
