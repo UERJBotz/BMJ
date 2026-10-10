@@ -23,7 +23,7 @@ float D = 0;
 float PID = 0;
 
 // Somente PD 
-float Kp = 205.0; // ponto inicial experimental, nao um valor otimo medido
+float Kp = 200.0; // ponto inicial experimental, nao um valor otimo medido
 float Ki = 0.0;
 float Kd = 20.0;
 // Escala preservada: -2 corresponde ao sensor a -30 graus e +2 a +30.
@@ -50,9 +50,9 @@ const int tempo_pendulo = 250; //ms
 
 const int tempo_devagar = 600; //ms
 unsigned long inicio_devagar = 0; //início devagar 
-const int VEL_DEVAGAR = 250;
+const int VEL_DEVAGAR = 200;
 
-const int tempo_chegada = 500; //ms
+const int tempo_chegada = 600; //ms
 unsigned long inicio_MM = 0; //início Mad Max
 
 // quantidade de ciclos consecutivos
@@ -85,7 +85,7 @@ void leituraSensores() {
 void calculoErroAngular() {
 
     // geometria angular
-    const float peso[3] = {-2.0f, 0.0f, 2.0f};
+    const float peso[3] = {-1.5f, 0.0f, 2.0f};
 
     float soma_pesos = 0;
     int ativos = 0;

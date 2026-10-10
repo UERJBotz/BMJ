@@ -1,6 +1,6 @@
 /* BMJ
  * IRremote=4.4.1
- * 1=PREPARE, 2=START (somente depois de 1), 3=STOP, 4..9=estratégias
+ * 1=PREPARE, 2=START (somente depois de 1), 3=STOP, 4..8=estratégias
  * https://github.com/UERJBotz/BMJ
  */
 #include <Arduino.h>
@@ -18,6 +18,8 @@
 #define BMJ_DIAGNOSTICO_IR 1
 #endif
 
+enum estado estado_atual;
+
 SumoIR IR;
 int strategy = 4;
 int modo_anterior = SumoIR::SUMO_STOP;
@@ -26,6 +28,11 @@ unsigned long duracao_sinalizacao = 0;
 unsigned long ultimo_status = 0;
 unsigned long quadros_ir = 0;
 
+unsigned long inicio_led_estrategia = 0;
+int pulsos_led_estrategia = 0;
+bool led_estrategia_ativo = false;
+
+
 void sinalizar(unsigned long duracao) {
     inicio_sinalizacao = millis();
     duracao_sinalizacao = duracao;
@@ -33,14 +40,46 @@ void sinalizar(unsigned long duracao) {
 
 void atualizarLed() {
     const bool base = IR.on() || IR.prepare();
+
+    // Indicacao da estrategia: 120 ms aceso e 300 ms apagado
+    if (led_estrategia_ativo) {
+        unsigned long dt = millis() - inicio_led_estrategia;
+        unsigned long duracao = (unsigned long)pulsos_led_estrategia * 420UL;
+
+        if (dt < duracao) {
+            unsigned long fase = dt % 420UL;
+            bool aceso = fase < 120UL;
+            digitalWrite(LED_PIN, aceso ? HIGH : LOW);
+            return;
+        }
+
+        led_estrategia_ativo = false;
+    }
+
+    // Sinalizacao normal de STOP, PREPARE e START
     const unsigned long dt = millis() - inicio_sinalizacao;
+    
     if (duracao_sinalizacao && dt < duracao_sinalizacao) {
-        // Selecionar em STOP acende; selecionar em PREPARE apaga brevemente.
-        digitalWrite(LED_PIN, ((dt / 100) % 2 == 0) ? !base : base);
+        digitalWrite(
+            LED_PIN,
+            ((dt / 100) % 2 == 0) ? !base : base
+        );
     } else {
         duracao_sinalizacao = 0;
-        digitalWrite(LED_PIN, base);
+        digitalWrite(LED_PIN, base ? HIGH : LOW);
     }
+}
+
+
+void indicarEstrategia(int numero) {
+    if (numero < 4 || numero > 8) return;
+
+    pulsos_led_estrategia = numero - 3;
+    inicio_led_estrategia = millis();
+    led_estrategia_ativo = true;
+
+    Serial.print("[ESTRATEGIA] Selecionada: ");
+    Serial.println(numero);
 }
 
 void setup() {
@@ -71,11 +110,12 @@ void loop() {
 
     if (IR.off()) {
       parar();
-      mostra_estrategia_no_led(strategy);
+      //mostra_estrategia_no_led(strategy);
     }
     if (IR.prepare()) {
+      estado_atual = G_ESQ;
       leituraSensores();
-      mostra_sensores_no_led(leitura);
+      //mostra_sensores_no_led(leitura);
       parar();
     }
 
@@ -99,21 +139,16 @@ void loop() {
         Serial.println("[ESTADO] PREPARE: aguardando 2");
     }
 
-    if (!IR.on() && IR.available() && cmd >= 4 && cmd <= 9) {
-      strategy = cmd;
+    
+    if (!IR.on() && IR.available() && cmd >= 4 && cmd <= 8) {
+        strategy = cmd;
 
-      reiniciarPerseguicao();
+        reiniciarPerseguicao();
+        indicarEstrategia(strategy);
 
-      if (strategy == 6) {
-          iniciarMaquinaEstados(false); // estratégia para esquerda
-      }
-      else if (strategy == 7) {
-          iniciarMaquinaEstados(true);  // estratégia para direita
-      }
-
-      sinalizar(100);
-      Serial.println("[SELECAO] estrategia aceita; numero em CMD acima");
+        Serial.println("[SELECAO] Estrategia aceita");
     }
+
 
     if (mudou && modo == SumoIR::SUMO_START) {
         Serial.println("[START] configurando PWM de 10 bits");
@@ -124,6 +159,19 @@ void loop() {
     }
 
     if (IR.on()) {
+        if(strategy == 6) leituraSensores();
+
+        enum simbolo simb;
+
+        // Máquina de Estados 
+        if      (leitura[0] && leitura[1] && leitura[2]) simb = FRENTE;
+        else if (leitura[0] && leitura[1])               simb = FRENTE_ESQ;
+        else if (leitura[1] && leitura[2])               simb = FRENTE_DIR;
+        else if (leitura[1])                             simb = FRENTE;
+        else if (leitura[0])                             simb = ESQ;
+        else if (leitura[2])                             simb = DIR;
+        else                                             simb = NADA;
+
         switch (strategy) {
             default:
             case 4: Perseguir(); break;
@@ -132,15 +180,12 @@ void loop() {
                 delay(5);
                 break;
             case 6:
-                SeekAndDestroy_L();
+                estado_atual = prox_estado(estado_atual, simb);
+                acao_atual(estado_atual);
                 delay(5);
                 break;
-            case 7:
-                SeekAndDestroy_R();
-                delay(5);
-                break;
-            case 8: MMPerseguir(); break;
-            case 9: DevagarPerseguir(); break;
+            case 7: MMPerseguir(); break;
+            case 8: DevagarPerseguir(); break;
         }
     }
 #if BMJ_DIAGNOSTICO_IR
